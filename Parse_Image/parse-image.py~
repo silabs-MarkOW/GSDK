@@ -1,0 +1,11 @@
+import bincopy
+import argparse
+
+if __name__ == '__main__':
+    parse = argsparse.ArgumentParser(description='set or show application version number')
+    parser.add_argument('-p', '--page-size', help='Flash page size')
+    parser.add_argument('-i', '--image', help='Image file')
+
+    args = parser.parse_args()
+    print(args)
+    
