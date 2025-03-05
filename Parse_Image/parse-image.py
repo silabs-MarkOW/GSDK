@@ -59,17 +59,24 @@ class ApplicationProperties :
         self.signatureTypes = { 0:'None', 1:'ECDSA_P256', 2:'CRC32' }
         self.magic = data.bytearray(16)
         self.structVersion = data.uint32()
-        if 0x201 == self.structVersion or 0x100 == self.structVersion :
-            self.signatureType = data.uint32()
-            self.signatureLocation = data.uint32()
-            self.app = ApplicationData(self.structVersion,data)
-            if None == self.signatureTypes.get(self.signatureType) :
-                print('Warning: signatureType: 0x%08x'%(self.signatureType))
-        else :
-            print('unknown struct version (0x%x)'%(self.structVersion))
-            quit()
+        if not self.known_version() :
+            raise RuntimeError('unknown struct version (0x%x)'%(self.structVersion))
+        self.signatureType = data.uint32()
+        if None == self.signatureTypes.get(self.signatureType) :
+            raise RuntimeError('Warning: signatureType: 0x%08x'%(self.signatureType))
+        self.signatureLocation = data.uint32()
+        self.app = ApplicationData(self.structVersion,data)
+        if 0x0100 == self.structVersion : return
+        self.cert = data.uint32()
+        self.longTokenSectionAddress = data.uint32()
+        if 0x0101 == self.structVersion : return
     def __str__(s) :
         return '{ structVersion:0x%x, signatureType:%d, signatureLocation:0x%x, app:%s }'%(s.structVersion,s.signatureType,s.signatureLocation,s.app.__str__())
+    def known_version(self) :
+        if 0x0100 == self.structVersion : return True 
+        if 0x0101 == self.structVersion : return True 
+        if 0x0200 == self.self.structVersion : return True
+        return False
     def render(self) :
         ret = self.magic
         ret += self.structVersion.tobytes()
@@ -83,7 +90,9 @@ class ApplicationProperties :
         ret += 'Signature type: %s\n'%(self.signatureTypes.get(self.signatureType))
         ret += 'Signature location: 0x%08x\n'%(self.signatureLocation)
         ret += self.app.show()
-        
+        if self.structVersion > 0x0100 :
+            ret += 'Certificate information location: 0x%08x\n'%(self.cert)
+            ret += 'Pointer to Long Token Data Section: 0x%08x\n'%(self.longTokenSectionAddress)
         return ret
 
 class BootloaderHeader :

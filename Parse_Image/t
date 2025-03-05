@@ -1,9 +1,0 @@
-        verifyApplication
-        initParser
-        parseBuffer
-        storage
-        parseImageInfo
-        parserContextSize
-        remainingApplicationUpgrades
-        getPeripheralList
-        getUpgradeLocation
