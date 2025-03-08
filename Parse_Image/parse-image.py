@@ -70,12 +70,15 @@ class ApplicationProperties :
         self.cert = data.uint32()
         self.longTokenSectionAddress = data.uint32()
         if 0x0101 == self.structVersion : return
+        self.decryptKey = data.bytearray(16)
+        if 0x0201 == self.structVersion : return
+        raise RuntimeError('Unknown structVersion 0x%08x'%(self.structVersion))
     def __str__(s) :
         return '{ structVersion:0x%x, signatureType:%d, signatureLocation:0x%x, app:%s }'%(s.structVersion,s.signatureType,s.signatureLocation,s.app.__str__())
     def known_version(self) :
         if 0x0100 == self.structVersion : return True 
         if 0x0101 == self.structVersion : return True 
-        if 0x0200 == self.self.structVersion : return True
+        if 0x0201 == self.structVersion : return True
         return False
     def render(self) :
         ret = self.magic
@@ -86,14 +89,17 @@ class ApplicationProperties :
         return ret
     def show(self) :
         ret = 'Application Properties\n'
-        ret += 'Structure version: %d.%d\n'%(self.structVersion & 0xff, self.structVersion >> 8)
+        ret += 'Structure version: 0x%08x\n'%(self.structVersion)
         ret += 'Signature type: %s\n'%(self.signatureTypes.get(self.signatureType))
-        ret += 'Signature location: 0x%08x\n'%(self.signatureLocation)
+        ret += 'Signature location: 0x%08x (page %d)\n'%(self.signatureLocation,self.signatureLocation >> page_bits)
         ret += self.app.show()
-        if self.structVersion > 0x0100 :
-            ret += 'Certificate information location: 0x%08x\n'%(self.cert)
-            ret += 'Pointer to Long Token Data Section: 0x%08x\n'%(self.longTokenSectionAddress)
-        return ret
+        if self.structVersion == 0x0100 : return ret
+        ret += 'Certificate information location: 0x%08x\n'%(self.cert)
+        ret += 'Pointer to Long Token Data Section: 0x%08x\n'%(self.longTokenSectionAddress)
+        if 0x0101 == self.structVersion : return ret
+        ret += 'decryptKey: 0x%032x\n'%(int.from_bytes(self.decryptKey,'little'))
+        if 0x0201 == self.structVersion : return ret
+        raise RuntimeError('Unknown structVersion 0x%08x'%(self.structVersion))
 
 class BootloaderHeader :
     def __init__(self,data) :
@@ -131,8 +137,8 @@ class BootloaderTable :
         ret = 'Bootloader Table:\n'
         ret += '  header:\n' + self.header.show()
         ret += '  size: 0x%x\n'%(self.size)
-        ret += '  startOfAppSpace: 0x%x\n'%(self.startOfAppSpace)
-        ret += '  endOfAppSpace: 0x%x\n'%(self.endOfAppSpace)
+        ret += '  startOfAppSpace: 0x%x (page %d)\n'%(self.startOfAppSpace,self.startOfAppSpace >> page_bits)
+        ret += '  endOfAppSpace: 0x%x (page %d)\n'%(self.endOfAppSpace,self.endOfAppSpace>>page_bits)
         ret += '  capabilities:\n'
         for i in range(32) :
             if (1 << i) & self.capabilities :
@@ -232,6 +238,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '--ram-size', help='RAM size; default %dk'%(default_ram_size>>10))
     parser.add_argument('-d', '--debug', action='store_true', help='Enable debug')
     parser.add_argument('-s', '--search', action='store_true', help='Search image for magic')
+    parser.add_argument('-2', '--series2',action='store_true', help='alias for --page-size=8192')
 
     args = parser.parse_args()
     if None == args.image :
@@ -248,6 +255,8 @@ if __name__ == '__main__':
     if args.debug : print('ram_size: %d'%(ram_size))
     if None == args.page_size :
         page_size = default_page_size
+        if args.series2 :
+            page_size = 8192
     else :
         page_size = parse_int(args.page_size)
     if args.debug : print('page_size: %d'%(page_size))
@@ -265,6 +274,7 @@ if __name__ == '__main__':
         print('Currently only supporting .hex and .s37 images')
         quit()
 
+    page_bits = int(numpy.floor(numpy.log2(page_size)))
     page_mask = page_size - 1
     if page_mask & page_size :
         print("page size must be a power of 2")
@@ -309,7 +319,7 @@ if __name__ == '__main__':
     if not modify :
         for location in application_properties :
             ap = ApplicationProperties(Structure(image,location))
-            print('Application Properties found at 0x%x'%(location))
+            print('Application Properties found at 0x%x (page %d)'%(location, location>>page_bits))
             print(ap.show())
         for location in bootloader_tables :
             print('bootloader table found at 0x%x'%(location))
